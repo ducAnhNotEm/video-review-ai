@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Project, Timeline, AgentNode, AgentEdge } from 'shared';
+import { Project, Timeline, AgentNode, AgentEdge, ProjectAsset } from 'shared';
 
 interface State {
   projects: Project[];
@@ -15,8 +15,12 @@ interface State {
 
   past: Timeline[];
   future: Timeline[];
+  assets: ProjectAsset[];
 
   // Actions
+  fetchAssets: () => Promise<void>;
+  importAsset: (filePath: string) => Promise<ProjectAsset>;
+  deleteAsset: (assetId: string) => Promise<void>;
   fetchProjects: () => Promise<void>;
   createProject: (name: string, file: File | null) => Promise<Project>;
   selectProject: (projectId: string) => Promise<void>;
@@ -83,6 +87,44 @@ export const useStore = create<State>((set, get) => ({
   zoom: 1,
   past: [],
   future: [],
+  assets: [],
+
+  fetchAssets: async () => {
+    const { activeProject } = get();
+    if (!activeProject) return;
+    try {
+      const data = await window.electronAPI.invoke('assets:list', activeProject.id);
+      set({ assets: data });
+    } catch (err: any) {
+      set({ error: err.message });
+    }
+  },
+
+  importAsset: async (filePath: string) => {
+    const { activeProject } = get();
+    if (!activeProject) throw new Error('No active project to import asset to');
+    try {
+      const newAsset = await window.electronAPI.invoke('assets:add', { projectId: activeProject.id, filePath });
+      set(state => ({
+        assets: [newAsset, ...state.assets]
+      }));
+      return newAsset;
+    } catch (err: any) {
+      set({ error: err.message });
+      throw err;
+    }
+  },
+
+  deleteAsset: async (assetId: string) => {
+    try {
+      await window.electronAPI.invoke('assets:delete', assetId);
+      set(state => ({
+        assets: state.assets.filter(a => a.id !== assetId)
+      }));
+    } catch (err: any) {
+      set({ error: err.message });
+    }
+  },
 
   fetchProjects: async () => {
     set({ isLoading: true, error: null });
@@ -138,12 +180,14 @@ export const useStore = create<State>((set, get) => ({
     try {
       const project = await window.electronAPI.invoke('projects:get', projectId);
       const timeline = await window.electronAPI.invoke('timeline:get', projectId);
+      const assets = await window.electronAPI.invoke('assets:list', projectId);
 
       set({
         activeProject: project,
         timeline,
         past: [],
         future: [],
+        assets,
         isLoading: false
       });
     } catch (err: any) {

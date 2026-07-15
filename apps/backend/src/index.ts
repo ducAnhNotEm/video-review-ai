@@ -1,8 +1,8 @@
 import * as path from 'path';
 import * as fs from 'fs';
 import { v4 as uuidv4 } from 'uuid';
-import { Project, Timeline, Track, Clip } from 'shared';
-import { initDb, projectRepository, timelineRepository } from './db';
+import { Project, Timeline, Track, Clip, ProjectAsset } from 'shared';
+import { initDb, projectRepository, timelineRepository, assetRepository } from './db';
 import { whisperService } from './services/whisperService';
 import { llmService } from './services/llmService';
 import { ffmpegService } from './services/ffmpegService';
@@ -23,6 +23,50 @@ if (!fs.existsSync(RENDERS_DIR)) fs.mkdirSync(RENDERS_DIR, { recursive: true });
 export function initIpc(ipcMain: any) {
   ipcMain.handle('projects:list', async () => {
     return projectRepository.list();
+  });
+
+  ipcMain.handle('assets:list', async (event: any, projectId: string) => {
+    return assetRepository.listForProject(projectId);
+  });
+
+  ipcMain.handle('assets:add', async (event: any, { projectId, filePath }: { projectId: string; filePath: string }) => {
+    if (!fs.existsSync(filePath)) throw new Error('File not found');
+    const ext = path.extname(filePath).toLowerCase();
+    const uniqueName = `${uuidv4()}${ext}`;
+    const targetPath = path.join(UPLOADS_DIR, uniqueName);
+    fs.copyFileSync(filePath, targetPath);
+
+    const absolutePath = targetPath.replace(/\\/g, '/');
+
+    let fileType: 'video' | 'audio' | 'image' = 'image';
+    if (['.mp4', '.mkv', '.avi', '.mov'].includes(ext)) {
+      fileType = 'video';
+    } else if (['.mp3', '.wav', '.m4a', '.aac'].includes(ext)) {
+      fileType = 'audio';
+    }
+
+    let durationMs: number | undefined;
+    if (fileType === 'video' || fileType === 'audio') {
+      durationMs = await ffmpegService.probeVideoDuration(absolutePath);
+    }
+
+    const newAsset: ProjectAsset = {
+      id: uuidv4(),
+      projectId,
+      name: path.basename(filePath),
+      filePath: absolutePath,
+      fileType,
+      durationMs,
+      createdAt: new Date().toISOString()
+    };
+
+    assetRepository.create(newAsset);
+    return newAsset;
+  });
+
+  ipcMain.handle('assets:delete', async (event: any, id: string) => {
+    assetRepository.delete(id);
+    return { success: true };
   });
 
   ipcMain.handle('projects:create', async (event: any, { name, inputVideoPath }: { name: string; inputVideoPath?: string }) => {

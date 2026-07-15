@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import { Project, Timeline, Track, Clip } from 'shared';
+import { Project, Timeline, Track, Clip, ProjectAsset } from 'shared';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -54,6 +54,17 @@ export function initDb() {
       transformJson TEXT,
       textConfigJson TEXT,
       FOREIGN KEY (trackId) REFERENCES tracks(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS assets (
+      id TEXT PRIMARY KEY,
+      projectId TEXT NOT NULL,
+      name TEXT NOT NULL,
+      filePath TEXT NOT NULL,
+      fileType TEXT NOT NULL,
+      durationMs INTEGER,
+      createdAt TEXT NOT NULL,
+      FOREIGN KEY (projectId) REFERENCES projects(id) ON DELETE CASCADE
     );
   `);
 }
@@ -204,5 +215,41 @@ export const timelineRepository = {
       tracks,
       durationMs: timelineRow.durationMs,
     };
+  }
+};
+
+// Asset CRUD Repository
+export const assetRepository = {
+  create(asset: ProjectAsset): void {
+    const stmt = db.prepare(`
+      INSERT INTO assets (id, projectId, name, filePath, fileType, durationMs, createdAt)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `);
+    stmt.run(
+      asset.id,
+      asset.projectId,
+      asset.name,
+      asset.filePath,
+      asset.fileType,
+      asset.durationMs ?? null,
+      asset.createdAt
+    );
+  },
+
+  listForProject(projectId: string): ProjectAsset[] {
+    const rows = db.prepare('SELECT * FROM assets WHERE projectId = ? ORDER BY createdAt DESC').all(projectId) as any[];
+    return rows.map(row => ({
+      id: row.id,
+      projectId: row.projectId,
+      name: row.name,
+      filePath: row.filePath,
+      fileType: row.fileType,
+      durationMs: row.durationMs !== null ? row.durationMs : undefined,
+      createdAt: row.createdAt
+    }));
+  },
+
+  delete(id: string): void {
+    db.prepare('DELETE FROM assets WHERE id = ?').run(id);
   }
 };

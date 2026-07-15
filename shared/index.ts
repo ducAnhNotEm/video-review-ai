@@ -12,6 +12,16 @@ export interface Project {
   errorMessage?: string;
 }
 
+export interface ProjectAsset {
+  id: string;
+  projectId: string;
+  name: string;
+  filePath: string;
+  fileType: 'video' | 'audio' | 'image';
+  durationMs?: number;
+  createdAt: string;
+}
+
 export type TrackType = 'video' | 'audio' | 'subtitle' | 'overlay';
 
 export interface Timeline {

@@ -13,7 +13,10 @@ contextBridge.revealInMainWorld('electronAPI', {
       'timeline:save',
       'ai:transcribe',
       'ai:generateScript',
-      'video:compile'
+      'video:compile',
+      'assets:list',
+      'assets:add',
+      'assets:delete'
     ];
     if (validChannels.includes(channel)) {
       return ipcRenderer.invoke(channel, ...args);

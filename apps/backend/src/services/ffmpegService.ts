@@ -200,6 +200,36 @@ export class FfmpegService {
 
     fs.writeFileSync(outputPath, srtContent, 'utf-8');
   }
+
+  public probeVideoDuration(filePath: string): Promise<number> {
+    return new Promise((resolve) => {
+      const ffprobe = spawn('ffprobe', [
+        '-v', 'error',
+        '-show_entries', 'format=duration',
+        '-of', 'default=noprint_wrappers=1:nokey=1',
+        filePath
+      ]);
+
+      let output = '';
+      ffprobe.stdout.on('data', (data) => {
+        output += data.toString();
+      });
+
+      ffprobe.on('close', (code) => {
+        if (code === 0) {
+          const durationSec = parseFloat(output.trim());
+          if (!isNaN(durationSec)) {
+            return resolve(Math.round(durationSec * 1000));
+          }
+        }
+        resolve(10000);
+      });
+
+      ffprobe.on('error', () => {
+        resolve(10000);
+      });
+    });
+  }
 }
 
 export const ffmpegService = new FfmpegService();
