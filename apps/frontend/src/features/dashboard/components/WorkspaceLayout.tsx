@@ -9,11 +9,37 @@ import { playerManager } from '../../player/playerManager';
 import { Clip } from 'shared';
 
 export function WorkspaceLayout() {
-  const { timeline, fetchProjects } = useStore();
+  const { timeline, fetchProjects, undo, redo, deleteTrack } = useStore();
 
   useEffect(() => {
     fetchProjects();
   }, [fetchProjects]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if user is currently writing text inputs
+      const activeEl = document.activeElement;
+      if (
+        activeEl && 
+        (activeEl.tagName === 'INPUT' || 
+         activeEl.tagName === 'TEXTAREA' || 
+         activeEl.getAttribute('contenteditable') === 'true')
+      ) {
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        e.preventDefault();
+        undo();
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        redo();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [undo, redo]);
 
   const [agentPrompt, setAgentPrompt] = useState('');
   const [provider, setProvider] = useState<'gemini' | 'openai' | 'ollama'>('gemini');
@@ -48,6 +74,7 @@ export function WorkspaceLayout() {
               timeline={timeline}
               selectedClipId={selectedClip?.id || null}
               onSelectClip={(clip) => setSelectedClip(clip)}
+              onDeleteTrack={deleteTrack}
               onSeek={handleSeek}
             />
           </div>

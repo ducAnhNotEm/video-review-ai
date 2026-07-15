@@ -13,12 +13,19 @@ interface State {
   error: string | null;
   zoom: number;
 
+  past: Timeline[];
+  future: Timeline[];
+
   // Actions
   fetchProjects: () => Promise<void>;
   createProject: (name: string, file: File | null) => Promise<Project>;
   selectProject: (projectId: string) => Promise<void>;
   deleteProject: (projectId: string) => Promise<void>;
   saveTimeline: (timeline: Timeline) => Promise<void>;
+  updateTimeline: (timeline: Timeline) => void;
+  undo: () => void;
+  redo: () => void;
+  deleteTrack: (trackId: string) => void;
   transcribeProject: (modelName?: string) => Promise<void>;
   generateScript: (prompt: string, provider: 'gemini' | 'openai' | 'ollama', modelName?: string) => Promise<void>;
   renderVideo: () => Promise<void>;
@@ -55,6 +62,14 @@ const defaultEdges: AgentEdge[] = [
   { id: 'e2', source: 'subtitle', target: 'compile' }
 ];
 
+let autosaveTimeout: any = null;
+const triggerAutosave = (timeline: Timeline, saveTimelineFn: (t: Timeline) => Promise<void>) => {
+  if (autosaveTimeout) clearTimeout(autosaveTimeout);
+  autosaveTimeout = setTimeout(() => {
+    saveTimelineFn(timeline);
+  }, 1500);
+};
+
 export const useStore = create<State>((set, get) => ({
   projects: [],
   activeProject: null,
@@ -66,6 +81,8 @@ export const useStore = create<State>((set, get) => ({
   isLoading: false,
   error: null,
   zoom: 1,
+  past: [],
+  future: [],
 
   fetchProjects: async () => {
     set({ isLoading: true, error: null });
@@ -104,6 +121,8 @@ export const useStore = create<State>((set, get) => ({
           durationMs: 0
         },
         nodes: defaultNodes,
+        past: [],
+        future: [],
         isLoading: false
       }));
 
@@ -123,6 +142,8 @@ export const useStore = create<State>((set, get) => ({
       set({
         activeProject: project,
         timeline,
+        past: [],
+        future: [],
         isLoading: false
       });
     } catch (err: any) {
@@ -155,6 +176,72 @@ export const useStore = create<State>((set, get) => ({
     } catch (err: any) {
       set({ error: err.message });
     }
+  },
+
+  updateTimeline: (timeline) => {
+    const { timeline: currentTimeline, past } = get();
+    const clonedPast = currentTimeline ? JSON.parse(JSON.stringify(currentTimeline)) : null;
+    const newPast = clonedPast ? [...past, clonedPast] : past;
+    
+    set({
+      timeline,
+      past: newPast,
+      future: []
+    });
+    
+    triggerAutosave(timeline, get().saveTimeline);
+  },
+
+  undo: () => {
+    const { past, future, timeline } = get();
+    if (past.length === 0) return;
+    
+    const previous = past[past.length - 1];
+    const newPast = past.slice(0, past.length - 1);
+    
+    const currentCloned = timeline ? JSON.parse(JSON.stringify(timeline)) : null;
+    const newFuture = currentCloned ? [...future, currentCloned] : future;
+    
+    set({
+      timeline: previous,
+      past: newPast,
+      future: newFuture
+    });
+    
+    if (previous) {
+      triggerAutosave(previous, get().saveTimeline);
+    }
+  },
+
+  redo: () => {
+    const { past, future, timeline } = get();
+    if (future.length === 0) return;
+    
+    const next = future[future.length - 1];
+    const newFuture = future.slice(0, future.length - 1);
+    
+    const currentCloned = timeline ? JSON.parse(JSON.stringify(timeline)) : null;
+    const newPast = currentCloned ? [...past, currentCloned] : past;
+    
+    set({
+      timeline: next,
+      past: newPast,
+      future: newFuture
+    });
+    
+    if (next) {
+      triggerAutosave(next, get().saveTimeline);
+    }
+  },
+
+  deleteTrack: (trackId) => {
+    const { timeline } = get();
+    if (!timeline) return;
+    
+    const newTimeline = JSON.parse(JSON.stringify(timeline)) as Timeline;
+    newTimeline.tracks = newTimeline.tracks.filter(t => t.id !== trackId);
+    
+    get().updateTimeline(newTimeline);
   },
 
   transcribeProject: async (modelName = 'base') => {
