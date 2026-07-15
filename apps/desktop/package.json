@@ -9,6 +9,6 @@
     "build": "echo Desktop wrapper is ready"
   },
   "devDependencies": {
-    "electron": "^28.2.0"
+    "electron": "^35.7.5"
   }
 }

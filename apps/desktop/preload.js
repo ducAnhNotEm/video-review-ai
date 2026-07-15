@@ -1,6 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-contextBridge.revealInMainWorld('electronAPI', {
+contextBridge.exposeInMainWorld('electronAPI', {
   invoke: (channel, ...args) => {
     // Whitelist channels to secure IPC
     const validChannels = [
