@@ -70,9 +70,7 @@ export const useStore = create<State>((set, get) => ({
   fetchProjects: async () => {
     set({ isLoading: true, error: null });
     try {
-      const res = await fetch('/api/projects');
-      if (!res.ok) throw new Error('Failed to fetch projects');
-      const data = await res.json();
+      const data = await window.electronAPI.invoke('projects:list');
       set({ projects: data, isLoading: false });
     } catch (err: any) {
       set({ error: err.message, isLoading: false });
@@ -85,25 +83,16 @@ export const useStore = create<State>((set, get) => ({
       let absolutePath = undefined;
 
       if (file) {
-        const formData = new FormData();
-        formData.append('video', file);
-        const uploadRes = await fetch('/api/upload', {
-          method: 'POST',
-          body: formData
-        });
-        if (!uploadRes.ok) throw new Error('Upload failed');
-        const uploadData = await uploadRes.json();
+        // In Electron, File objects have a path property
+        const filePath = (file as any).path;
+        if (!filePath) {
+          throw new Error('File path not found. Make sure you are running in Electron desktop environment.');
+        }
+        const uploadData = await window.electronAPI.invoke('file:upload', filePath);
         absolutePath = uploadData.absolutePath;
       }
 
-      const res = await fetch('/api/projects', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, inputVideoPath: absolutePath })
-      });
-
-      if (!res.ok) throw new Error('Failed to create project');
-      const newProj = await res.json();
+      const newProj = await window.electronAPI.invoke('projects:create', { name, inputVideoPath: absolutePath });
       
       set(state => ({
         projects: [newProj, ...state.projects],
@@ -128,12 +117,8 @@ export const useStore = create<State>((set, get) => ({
   selectProject: async (projectId) => {
     set({ isLoading: true, error: null });
     try {
-      const projRes = await fetch(`/api/projects/${projectId}`);
-      if (!projRes.ok) throw new Error('Project not found');
-      const project = await projRes.json();
-
-      const timeRes = await fetch(`/api/projects/${projectId}/timeline`);
-      const timeline = await timeRes.json();
+      const project = await window.electronAPI.invoke('projects:get', projectId);
+      const timeline = await window.electronAPI.invoke('timeline:get', projectId);
 
       set({
         activeProject: project,
@@ -147,10 +132,7 @@ export const useStore = create<State>((set, get) => ({
 
   deleteProject: async (projectId) => {
     try {
-      const res = await fetch(`/api/projects/${projectId}`, {
-        method: 'DELETE'
-      });
-      if (!res.ok) throw new Error('Delete failed');
+      await window.electronAPI.invoke('projects:delete', projectId);
       
       set(state => {
         const nextProjects = state.projects.filter(p => p.id !== projectId);
@@ -168,12 +150,7 @@ export const useStore = create<State>((set, get) => ({
 
   saveTimeline: async (timeline) => {
     try {
-      const res = await fetch(`/api/projects/${timeline.projectId}/timeline`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(timeline)
-      });
-      if (!res.ok) throw new Error('Failed to save timeline');
+      await window.electronAPI.invoke('timeline:save', timeline);
       set({ timeline });
     } catch (err: any) {
       set({ error: err.message });
@@ -189,14 +166,7 @@ export const useStore = create<State>((set, get) => ({
     }));
 
     try {
-      const res = await fetch(`/api/projects/${activeProject.id}/transcribe`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: modelName })
-      });
-
-      if (!res.ok) throw new Error('Transcription failed');
-      const data = await res.json();
+      const data = await window.electronAPI.invoke('ai:transcribe', { projectId: activeProject.id, modelName });
 
       set(state => ({
         activeProject: { ...state.activeProject!, status: 'completed' },
@@ -220,14 +190,12 @@ export const useStore = create<State>((set, get) => ({
     }));
 
     try {
-      const res = await fetch(`/api/projects/${activeProject.id}/script`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, provider, modelName })
+      const data = await window.electronAPI.invoke('ai:generateScript', {
+        projectId: activeProject.id,
+        prompt,
+        provider,
+        modelName
       });
-
-      if (!res.ok) throw new Error('Script generation failed');
-      const data = await res.json();
 
       set(state => ({
         activeProject: { ...state.activeProject!, script: data.script },
@@ -253,12 +221,7 @@ export const useStore = create<State>((set, get) => ({
     }));
 
     try {
-      const res = await fetch(`/api/projects/${activeProject.id}/render`, {
-        method: 'POST'
-      });
-
-      if (!res.ok) throw new Error('Video rendering failed');
-      const data = await res.json();
+      const data = await window.electronAPI.invoke('video:compile', activeProject.id);
 
       set(state => ({
         activeProject: { ...state.activeProject!, status: 'completed', outputVideoPath: data.outputVideoPath },

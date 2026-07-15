@@ -1,36 +1,18 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, ipcMain, protocol } = require('electron');
 const path = require('path');
-const { fork } = require('child_process');
 
 let mainWindow;
-let backendProcess;
 
-function startBackend() {
-  const isDev = process.env.NODE_ENV !== 'production';
-  if (isDev) {
-    console.log('Development mode: Skipping backend fork inside Electron (running independently).');
-    return;
+// Initialize IPC handlers from backend
+// In production and dev, we require the compiled JS from backend
+function initializeIpc() {
+  try {
+    const { initIpc } = require(path.join(__dirname, '../backend/dist/src/index.js'));
+    initIpc(ipcMain);
+    console.log('IPC Handlers initialized successfully from backend module.');
+  } catch (err) {
+    console.error('Failed to initialize backend IPC. Make sure backend is compiled:', err);
   }
-
-  const backendPath = path.join(__dirname, '../backend/dist/src/index.js');
-  
-  console.log(`Starting background backend process: ${backendPath}`);
-  
-  backendProcess = fork(backendPath, [], {
-    env: { ...process.env, PORT: '5000' }
-  });
-
-  backendProcess.on('message', (msg) => {
-    console.log(`Backend process message:`, msg);
-  });
-
-  backendProcess.on('error', (err) => {
-    console.error('Backend process encountered error:', err);
-  });
-
-  backendProcess.on('exit', (code) => {
-    console.log(`Backend process exited with code ${code}`);
-  });
 }
 
 function createWindow() {
@@ -39,8 +21,9 @@ function createWindow() {
     height: 900,
     title: "AI Video Agent Studio",
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false
+      nodeIntegration: false,
+      contextIsolation: true,
+      preload: path.join(__dirname, 'preload.js')
     },
     backgroundColor: '#070a13'
   });
@@ -60,16 +43,26 @@ function createWindow() {
   });
 }
 
-app.on('ready', () => {
-  startBackend();
+app.whenReady().then(() => {
+  // Register custom protocol to bypass file:// security for local media
+  protocol.registerFileProtocol('media', (request, callback) => {
+    // URL format: media://absolute/path/to/file.mp4
+    const url = request.url.replace('media://', '');
+    try {
+      return callback({ path: decodeURIComponent(url) });
+    }
+    catch (error) {
+      console.error(error);
+      return callback(-1);
+    }
+  });
+
+  initializeIpc();
   createWindow();
 });
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
-    if (backendProcess) {
-      backendProcess.kill();
-    }
     app.quit();
   }
 });

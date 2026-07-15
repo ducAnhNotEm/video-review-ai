@@ -108,9 +108,9 @@ export default function App() {
   };
 
   const activeVideoUrl = activeProject?.outputVideoPath 
-    ? `/${activeProject.outputVideoPath}` 
+    ? `media://${activeProject.outputVideoPath}` 
     : activeProject?.inputVideoPath 
-      ? `/${activeProject.inputVideoPath}` 
+      ? `media://${activeProject.inputVideoPath}` 
       : '';
 
   return (

@@ -128,3 +128,12 @@ export interface CompileVideoRequest {
 export interface CompileVideoResponse {
   outputFilePath: string;
 }
+
+declare global {
+  interface Window {
+    electronAPI: {
+      invoke: (channel: string, ...args: any[]) => Promise<any>;
+    }
+  }
+}
+
