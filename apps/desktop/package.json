@@ -1,0 +1,14 @@
+{
+  "name": "desktop",
+  "version": "1.0.0",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "build": "echo Desktop wrapper is ready"
+  },
+  "devDependencies": {
+    "electron": "^28.2.0"
+  }
+}

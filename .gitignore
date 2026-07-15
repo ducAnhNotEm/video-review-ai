@@ -5,15 +5,25 @@
 __pycache__/
 *.pyc
 
+# Node
+node_modules/
+dist/
+package-lock.json
+
 # Environment
 .env
 
 # VS Code
 .vscode/
 
-# Output
-data/output/
+# Output and user data
+data/video-agent.db
+data/video-agent.db-journal
+data/video-agent.db-wal
+data/uploads/
+data/renders/
 data/temp/
+data/output/
 
 # Models
 models/
