@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { Timeline, Clip } from 'shared';
-import { useStore } from '../../store/useStore';
+import { useStore } from '../../../store/useStore';
 import { TimelineRuler } from './TimelineRuler';
 import { TrackRow } from './TrackRow';
 import { Playhead } from './Playhead';
